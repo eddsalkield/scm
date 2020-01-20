@@ -1,28 +1,15 @@
-# dotfiles-manager
+# scm
+Copyright © 2020 Edd Salkield, 2017 Samuel Walladge
 
-Copyright © 2017 Samuel Walladge
-
-Experimental dotfiles manager in rust.
+Simple configuration file (dotfile) manager written in Rust.
+Aims to be as simple as possible, with additional functionality non-core depending on the `scm` base.
 
 [![Build Status](https://travis-ci.org/swalladge/dotfiles-manager.svg?branch=master)](https://travis-ci.org/swalladge/dotfiles-manager)
 [![Coverage Status](https://coveralls.io/repos/github/swalladge/dotfiles-manager/badge.svg?branch=master)](https://coveralls.io/github/swalladge/dotfiles-manager?branch=master)
 
-**THIS IS UNMAINTAINED SOFTWARE**
-
-This was a toy project for university which I have no intention of maintaining
-or putting any further work into.  If there's something interesting here that
-you wish to use, please go ahead - fork, copy, redistribute, whatever under the
-terms of the GPL! Sorry for any inconvenience.
-
 # About
 
-This is a project for PRT455 (Software Engineering Practice).
-The idea is to build a dotfiles manager that is fast, stable, and features the
-best from a selection of other dotfiles managers and community interest.
-
-Direction for the project taken from initial research, documented in the
-[project plan](docs/PRT455-project-plan-SamuelWalladge.pdf), and a
-[survey](https://swalladge.id.au/posts/2017/08/07/dotfiles-config-survey.html).
+`scm` aims to be a fast, stable, and portable configuration manager.  It is designed to systematically symlink files across your filesystem, with minimal bloat.
 
 GitHub issues are currently used for tracking progress and documenting requirements.
 
