@@ -55,7 +55,7 @@ pub fn get_args(matches: clap::ArgMatches) -> Result<Args, &'static str> {
             }
         }
         None => {
-            match env::home_dir() {
+            match dirs::home_dir() {
                 Some(path) => PathBuf::from(path),
                 None => {
                     return Err("could not determine home directory");
@@ -140,7 +140,6 @@ pub fn get_args(matches: clap::ArgMatches) -> Result<Args, &'static str> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::fs;
     use std::path::PathBuf;
 
@@ -279,7 +278,7 @@ mod tests {
         let app = app::new();
         let app_args = vec!["dotfiles-manager", "install", "vim", "zsh"];
         let args = args::get_args(app.get_matches_from(app_args)).unwrap();
-        assert_eq!(args.target_dir, env::home_dir().unwrap());
+        assert_eq!(args.target_dir, dirs::home_dir().unwrap());
     }
 
     #[test]
