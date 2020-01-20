@@ -30,7 +30,7 @@ echo "Using kcov executable: $KCOV_BIN"
 # temporary local directory
 export TEMP_LOCAL="${BASE_DIR}/local"
 
-if [ ! -f "${BASE_DIR}/target/debug/dotfiles-manager" ]; then
+if [ ! -f "${BASE_DIR}/target/debug/scm" ]; then
      echo "Could not find executable! Please run cargo build first!"
      exit 1
 fi
@@ -56,13 +56,13 @@ exe() {
     local abs_coverage_dir="$(readlink -f ${coverage_dir})"
     cd "$previous"
 
-    $KCOV_BIN --exclude-pattern=/.cargo,/usr/lib --verify "$coverage_dir" "${BASE_DIR}/target/debug/dotfiles-manager" "$@"
+    $KCOV_BIN --exclude-pattern=/.cargo,/usr/lib --verify "$coverage_dir" "${BASE_DIR}/target/debug/scm" "$@"
   fi
 }
 
 # use this to run the executable without kcov (faster, use for setup tasks)
 exe_sans() {
-   "${BASE_DIR}/target/debug/dotfiles-manager" "$@"
+   "${BASE_DIR}/target/debug/scm" "$@"
 }
 
 # assert helper functions

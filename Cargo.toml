@@ -1,10 +1,10 @@
 [package]
-name = "dotfiles-manager"
+name = "scm"
 version = "0.0.1"
-authors = ["Samuel Walladge <samuel@swalladge.id.au>"]
-description = "experimental dotfiles manager"
-homepage = "https://github.com/swalladge/dotfiles-manager"
-repository = "https://github.com/swalladge/dotfiles-manager"
+authors = ["Edd Salkield <edd@salkield.uk>"]
+description = "A fast, stable, and portable configuration manager written in Rust"
+homepage = "https://github.com/eddsalkield/scm"
+repository = "https://github.com/eddsalkield/scm"
 readme = "README.md"
 keywords = ["dotfiles"]
 license = "GPL-3.0"
