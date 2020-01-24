@@ -1,11 +1,23 @@
-use std::io::{self, Write};
-use std::path::PathBuf;
+// TODO:
+// rustfmt to format the code
+// clippy to lint the code
+
+use std::error::Error;
+
+use std::io::{self, Read, Write};
+use std::path::{PathBuf, Path};
+use std::fs;
 use std::collections::{HashMap, HashSet};
+use std::env;
+use std::os::unix::prelude::*;
+use std::ffi::{OsStr, OsString};
 
 use args::Args;
 use hooks;
 use file_ops::FS;
-
+use toml::Value;
+use regex::Regex;
+use settings;
 
 /// Prompts the user to answer yes or no to a prompt
 /// Returns true on positive answer, false otherwise
@@ -29,6 +41,108 @@ fn ask(prompt: &str) -> bool {
     return false;
 }
 
+// TODO
+fn substitute_variable_name(it: &mut impl Iterator<Item = u8>, r: &mut Vec<u8>) -> Result<(), io::Error> {
+    let mut v = Vec::<u8>::new();
+    // Fail if the next character read is not alphabetic, or an underscore
+
+    if it.next() != Some(b'{') {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Invalid path: unescaped '$' must be followed by a bracketed variable name, e.g. ${HOME}"));
+    }
+
+    let b = it.next().unwrap();
+    if ! (b.is_ascii_alphabetic() || b == b'_') {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Invalid path: variables must start with an alphabetic character or _"));
+    }
+    v.push(b);
+
+    let mut complete = false;
+    while let Some(b) = it.next() {
+        if b == b'}' {
+            complete = true;
+            break;
+        }
+        else if ! (b.is_ascii_alphanumeric() || b == b'_') {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "Invalid path: variables may only contain alphanumeric characters of _"));
+        }
+        else {
+            v.push(b);
+        }
+    }
+
+    if ! complete {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Invalid path: variables must end with a closing }"));
+    }
+
+    let var_name = OsStr::from_bytes(&v);
+    match env::var_os(var_name) {
+        Some(val) => {let mut result: Vec<u8> = val.as_bytes().to_vec(); r.append(&mut result)}
+        None => println!("var_name is not defined in the environment"),
+    }
+
+    Ok(())
+}
+
+fn substitute_variables(string: &Path) -> Result<PathBuf, io::Error> {
+    let mut r = Vec::<u8>::new();
+    let pb = string.to_path_buf();
+    let mut it = pb.to_str().unwrap().as_bytes().iter().cloned();
+    while let Some(b) = it.next() {
+        if b == b'\\' {
+            let b2 = match it.next() {
+                Some(v) => v,
+                None => return Err(io::Error::new(io::ErrorKind::NotFound, "Invalid path: ends in \\")),
+            };
+            r.push(b2);
+        } else if b == b'$' {
+            substitute_variable_name(&mut it, &mut r);
+        } else {
+            r.push(b);
+        }
+    }
+
+    Ok(OsString::from_vec(r).into())
+}
+
+fn validate_settings_file(path: &Path) -> bool {
+    path.is_file() && path.is_absolute()
+}
+
+fn parse_settings_file(path: &Path) -> Result<settings::Settings, io::Error> {
+    let contents = fs::read_to_string(path)?;
+    let value = toml::from_str(&contents).unwrap();
+    Ok(value)
+}
+
+fn get_target(base_dir: Option<&Path>, settings: &settings::Settings) -> Result<PathBuf, io::Error> {
+    if let Some(base_dir) = base_dir {
+        if ! base_dir.is_dir() {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "base is not a valid base directory"));
+        }
+        if ! base_dir.is_absolute() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "base is not an absolute path"));
+        }
+    }
+
+    let mut expanded_target: Option<PathBuf> = None;
+    for t in settings.target.iter() {
+        let cp = substitute_variables(&t.path)?;
+        let candidate_path = cp.as_path();
+        // Assert candidate_path is a subdir of base_dir
+        
+        if expanded_target.is_none() {
+            if candidate_path.is_dir() && candidate_path.is_absolute() {
+                expanded_target = Some(candidate_path.to_path_buf());
+            }
+        }
+    }
+
+    match expanded_target {
+        Some(t) => Ok(t),
+        None => Err(io::Error::new(io::ErrorKind::InvalidInput, "no valid target found")),
+    }
+}
+
 pub struct Runner<'a> {
     args: &'a Args,
 }
@@ -44,14 +158,33 @@ impl<'a> Runner<'a> {
 
         let f: FS = FS::new(self.args.force);
 
+        let mut base_directory = args.dir.clone();
+        let mut base_settings_file = base_directory.clone();
+        base_settings_file.push("settings.toml");
+
+        let mut global_target_dir = args.target_dir.clone();
+        if validate_settings_file(&base_settings_file) {
+            let mut settings = parse_settings_file(&base_settings_file).unwrap();
+            global_target_dir = get_target(None, &settings).unwrap();
+        }
+
         for package1 in &args.packages {
             println!(":: Installing package {:?}", package1);
 
             let mut package_base = args.dir.clone();
             package_base.push(package1);
 
+            let mut global_settings_file = package_base.clone();
+            global_settings_file.push("settings.toml");
+
+            let mut target_dir = global_target_dir.clone();
+            if validate_settings_file(&global_settings_file) {
+                let mut settings = parse_settings_file(&global_settings_file).unwrap();
+                target_dir = get_target(None, &settings).unwrap();
+            }
+
             println!(":: Will install from {:?}", package_base);
-            println!("                  to {:?}", args.target_dir);
+            println!("                  to {:?}", target_dir);
 
             // only prompt if not in test mode and haven't added the 'no confirm' flag
             if !args.no_confirm && !args.test {
@@ -89,7 +222,7 @@ impl<'a> Runner<'a> {
             let dirs = f.get_dirs_to_create(&global_files_base);
             for dir in dirs {
                 let base = dir.strip_prefix(&global_files_base).unwrap();
-                let new_dir = args.target_dir.join(base);
+                let new_dir = target_dir.join(base);
 
                 if !args.test {
                     let result = f.create_dir_all(&new_dir);
@@ -114,7 +247,7 @@ impl<'a> Runner<'a> {
                 let host_dirs = f.get_dirs_to_create(&host_files_base);
                 for dir in host_dirs {
                     let base = dir.strip_prefix(&host_files_base).unwrap();
-                    let new_dir = args.target_dir.join(base);
+                    let new_dir = target_dir.join(base);
 
                     if !args.test {
                         let result = f.create_dir_all(&new_dir);
@@ -138,14 +271,14 @@ impl<'a> Runner<'a> {
             // this method allows host-specfic files to take precedence
             let mut dests: HashMap<PathBuf, PathBuf> = HashMap::new();
             for file in host_files {
-                let dest = args.target_dir.join(
+                let dest = target_dir.join(
                     file.strip_prefix(&host_files_base).unwrap(),
                 );
                 dests.insert(dest, file.clone());
             }
 
             for file in files {
-                let dest = args.target_dir.join(
+                let dest = target_dir.join(
                     file.strip_prefix(&global_files_base)
                         .unwrap(),
                 );
@@ -201,14 +334,32 @@ impl<'a> Runner<'a> {
 
         let f: FS = FS::new(self.args.force);
 
+        let mut base_directory = args.dir.clone();
+        let mut base_settings_file = base_directory.clone();
+        base_settings_file.push("settings.toml");
+
+        let mut global_target_dir = args.target_dir.clone();
+        if validate_settings_file(&base_settings_file) {
+            let mut settings = parse_settings_file(&base_settings_file).unwrap();
+            global_target_dir = get_target(None, &settings).unwrap();
+        }
+
         for package1 in &args.packages {
             println!(":: Removing package {:?}", package1);
 
             let mut package_base = args.dir.clone();
             package_base.push(package1);
 
+            let mut global_settings_file = package_base.clone();
+            global_settings_file.push("settings.toml");
 
-            println!(":: Will remove all links in {:?}", args.target_dir);
+            let mut target_dir = global_target_dir.clone();
+            if validate_settings_file(&global_settings_file) {
+                let mut settings = parse_settings_file(&global_settings_file).unwrap();
+                target_dir = get_target(None, &settings).unwrap();
+            }
+
+            println!(":: Will remove all links in {:?}", target_dir);
             println!("     that point to files in {:?}", package_base);
 
             // only prompt if not in test mode and haven't added the 'no confirm' flag
@@ -252,7 +403,7 @@ impl<'a> Runner<'a> {
                 let host_dirs = f.get_dirs_to_create(&host_files_base);
                 for dir in host_dirs {
                     let base = dir.strip_prefix(&host_files_base).unwrap();
-                    let new_dir = args.target_dir.join(base);
+                    let new_dir = target_dir.join(base);
 
                     let result = f.create_dir_all(&new_dir);
                     match result {
@@ -272,14 +423,14 @@ impl<'a> Runner<'a> {
             // this method allows host-specfic files to take precedence
             let mut dests: HashSet<PathBuf> = HashSet::new();
             for file in host_files {
-                let dest = args.target_dir.join(
+                let dest = target_dir.join(
                     file.strip_prefix(&host_files_base).unwrap(),
                 );
                 dests.insert(dest);
             }
 
             for file in files {
-                let dest = args.target_dir.join(
+                let dest = target_dir.join(
                     file.strip_prefix(&global_files_base)
                         .unwrap(),
                 );
@@ -385,7 +536,7 @@ impl<'a> Runner<'a> {
         }
         target.push("files");
 
-        let file_base = match add_args.filename.strip_prefix(&self.args.target_dir) {
+        let file_base = match add_args.filename.strip_prefix(&self.args.target_dir) {   // TODO fix
             Ok(path) => path,
             Err(_) => {
                 println!("ERR: File to add must be in the target directory.");

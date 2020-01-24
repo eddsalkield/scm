@@ -67,7 +67,7 @@ pub fn get_args(matches: clap::ArgMatches) -> Result<Args, &'static str> {
     let hostname = match matches.value_of("hostname") {
         Some(name) => name.to_owned(),
         _ => {
-            match sys_info::hostname() {
+            match sys_info::hostname() {    // Issue: may fail if `hostname` command not installed
                 Ok(name) => name,
                 Err(_) => {
                     return Err("could not determine hostname");

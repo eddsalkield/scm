@@ -1,7 +1,8 @@
-
 extern crate clap;
-
 extern crate sys_info;
+extern crate toml;
+extern crate regex;
+extern crate serde;
 
 use args::Command;
 use runner::Runner;
@@ -11,6 +12,7 @@ mod args;
 mod runner;
 mod hooks;
 mod file_ops;
+mod settings;
 
 // exit code structure idea from https://stackoverflow.com/a/30285110
 fn main() {

@@ -2,10 +2,10 @@ use clap::{App, Arg, SubCommand};
 
 
 pub fn new() -> App<'static, 'static> {
-    App::new("dotfiles-manager")
+    App::new("scm")
     .version("0.0.1")
-    .author("Samuel Walladge <samuel@swalladge.id.au>")
-    .about("Manages dotfiles")
+    .author("Edd Salkield <edd@salkield.uk>")
+    .about("A fast, stable, and portable configuration manager written in Rust")
     .arg(
         Arg::with_name("dir")
             .short("d")

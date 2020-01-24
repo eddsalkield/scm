@@ -1,0 +1,3 @@
+target = [
+	{ path = "${TEMP_LOCAL}/new-target/" }
+]
