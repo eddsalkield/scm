@@ -42,7 +42,7 @@ fn ask(prompt: &str) -> bool {
 }
 
 // TODO
-fn substitute_variable_name(it: &mut impl Iterator<Item = u8>, r: &mut Vec<u8>) -> Result<(), io::Error> {
+fn substitute_variable_name(it: &mut impl Iterator<Item = u8>, r: &mut Vec<u8>) -> Result<bool, io::Error> {
     let mut v = Vec::<u8>::new();
     // Fail if the next character read is not alphabetic, or an underscore
 
@@ -77,13 +77,13 @@ fn substitute_variable_name(it: &mut impl Iterator<Item = u8>, r: &mut Vec<u8>) 
     let var_name = OsStr::from_bytes(&v);
     match env::var_os(var_name) {
         Some(val) => {let mut result: Vec<u8> = val.as_bytes().to_vec(); r.append(&mut result)}
-        None => println!("var_name is not defined in the environment"),
+        None => return Ok(false),
     }
 
-    Ok(())
+    Ok(true)
 }
 
-fn substitute_variables(string: &Path) -> Result<PathBuf, io::Error> {
+fn substitute_variables(string: &Path) -> Result<Option<PathBuf>, io::Error> {
     let mut r = Vec::<u8>::new();
     let pb = string.to_path_buf();
     let mut it = pb.to_str().unwrap().as_bytes().iter().cloned();
@@ -95,13 +95,15 @@ fn substitute_variables(string: &Path) -> Result<PathBuf, io::Error> {
             };
             r.push(b2);
         } else if b == b'$' {
-            substitute_variable_name(&mut it, &mut r);
+            if ! substitute_variable_name(&mut it, &mut r)? {
+                return Ok(None);
+            }
         } else {
             r.push(b);
         }
     }
 
-    Ok(OsString::from_vec(r).into())
+    Ok(Some(OsString::from_vec(r).into()))
 }
 
 fn validate_settings_file(path: &Path) -> bool {
@@ -126,14 +128,18 @@ fn get_target(base_dir: Option<&Path>, settings: &settings::Settings) -> Result<
 
     let mut expanded_target: Option<PathBuf> = None;
     for t in settings.target.iter() {
-        let cp = substitute_variables(&t.path)?;
+        let cp = match substitute_variables(&t.path)? {
+            Some(c) => c,
+            None => continue,
+        };
+
         let candidate_path = cp.as_path();
         // Assert candidate_path is a subdir of base_dir
         
         if expanded_target.is_none() {
-            if candidate_path.is_dir() && candidate_path.is_absolute() {
-                expanded_target = Some(candidate_path.to_path_buf());
-            }
+//            if candidate_path.is_dir() && candidate_path.is_absolute() {
+            expanded_target = Some(candidate_path.to_path_buf());
+//            }
         }
     }
 

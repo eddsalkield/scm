@@ -21,3 +21,9 @@ serde = { version = "1.0.104", features = ["derive"] }
 [badges]
 travis-ci = { repository = "swalladge/dotfiles-manager", branch = "master" }
 coveralls = { repository = "swalladge/dotfiles-manager", branch = "master" }
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+scm = { path = "/usr/bin/scm" }
