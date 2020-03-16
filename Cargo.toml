@@ -1,6 +1,6 @@
 [package]
 name = "scm"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Edd Salkield <edd@salkield.uk>"]
 description = "A fast, stable, and portable configuration manager written in Rust"
 homepage = "https://github.com/eddsalkield/scm"
