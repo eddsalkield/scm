@@ -136,6 +136,29 @@ impl FS {
         vec
     }
 
+    // Creates all required directories in target_dir as defined in base
+    // Does not touch the directory structure if test
+    pub fn create_dirs(&self, files_base: &PathBuf, target_dir: &PathBuf, test: bool) -> bool {
+        let dirs = self.get_dirs_to_create(&files_base);
+        for dir in dirs {
+            let base = dir.strip_prefix(&files_base).unwrap();
+            let new_dir = target_dir.join(base);
+
+            if !test {
+                let result = self.create_dir_all(&new_dir);
+                match result {
+                    Ok(_) => (),
+                    Err(msg) => {
+                        println!("::!!!! Creating {:?} failed: {}", new_dir, msg);
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+
+    }
+
     pub fn exists(&self, path: &PathBuf) -> bool {
         return path.exists();
     }

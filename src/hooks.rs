@@ -3,7 +3,7 @@ use std::process::Command;
 use std::collections::HashMap;
 use std::ffi::OsString;
 
-pub fn run_hooks(dir: &PathBuf, host_dir: &PathBuf, simulate: bool) -> bool {
+pub fn run_hooks(dir: &PathBuf, host_dir: &PathBuf, tag_dirs: &Vec<PathBuf>, simulate: bool) -> bool {
 
     let mut hooks_files = HashMap::new();
 
@@ -28,6 +28,9 @@ pub fn run_hooks(dir: &PathBuf, host_dir: &PathBuf, simulate: bool) -> bool {
             println!("{:?} {}", dir, msg);
         }
     }
+
+    // collect the tag-specific hooks
+    //
 
     // collect the host-specific hooks
     // hooks with the same file name will override those from the global directory

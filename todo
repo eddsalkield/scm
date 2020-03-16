@@ -4,3 +4,6 @@ Write a few more tests
 Lint code with clippy and rustfmt
 Guarantees regarding base_dir
 Write documentation
+
+Variable settings.toml names
+Tags

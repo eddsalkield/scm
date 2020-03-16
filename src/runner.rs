@@ -41,7 +41,7 @@ fn ask(prompt: &str) -> bool {
     return false;
 }
 
-// TODO
+
 fn substitute_variable_name(it: &mut impl Iterator<Item = u8>, r: &mut Vec<u8>) -> Result<bool, io::Error> {
     let mut v = Vec::<u8>::new();
     // Fail if the next character read is not alphabetic, or an underscore
@@ -204,83 +204,80 @@ impl<'a> Runner<'a> {
             global_hooks_base.push("hooks");
 
             // run the pre-up hooks
-
             let mut pre_up_hooks_dir = global_hooks_base.clone();
             pre_up_hooks_dir.push("pre-up");
             let mut host_pre_up_hooks_dir = package_base.clone();
-            host_pre_up_hooks_dir.push("hosts");
-            host_pre_up_hooks_dir.push(&args.hostname);
-            host_pre_up_hooks_dir.push("hooks");
-            host_pre_up_hooks_dir.push("pre-up");
+            host_pre_up_hooks_dir.push(format!("hosts/{}/hooks/pre-up/", &args.hostname));
+            let mut tag_pre_up_hooks_dir = Vec::new();
+            for tag in &args.tags {
+                let mut pre_up_tag_dir = package_base.clone();
+                pre_up_tag_dir.push(format!("tags/{}/hooks/pre-up/", &tag));
+                tag_pre_up_hooks_dir.push(pre_up_tag_dir);
+            }
 
             println!(":: Executing pre-up hooks.");
-            let ok = hooks::run_hooks(&pre_up_hooks_dir, &host_pre_up_hooks_dir, args.test);
+            let ok = hooks::run_hooks(&pre_up_hooks_dir, &host_pre_up_hooks_dir, &tag_pre_up_hooks_dir, args.test);
             if !ok {
                 return false;
             }
 
+            println!(":: Creating parent dirs where required.");
 
             let mut global_files_base = package_base.clone();
             global_files_base.push("files");
 
-            println!(":: Creating parent dirs where required.");
-            // create all the directories required
-            let dirs = f.get_dirs_to_create(&global_files_base);
-            for dir in dirs {
-                let base = dir.strip_prefix(&global_files_base).unwrap();
-                let new_dir = target_dir.join(base);
-
-                if !args.test {
-                    let result = f.create_dir_all(&new_dir);
-                    match result {
-                        Ok(_) => (),
-                        Err(msg) => println!(":: Creating {:?} failed: {}", new_dir, msg),
-                    }
-                }
-
-            }
+            f.create_dirs(&global_files_base, &target_dir, args.test);
+            let files = f.get_files_to_symlink(&global_files_base);
 
             // host specific config
             let mut host_files_base = package_base.clone();
-            host_files_base.push("hosts");
-            host_files_base.push(&args.hostname);
-            host_files_base.push("files");
+            host_files_base.push(format!("hosts/{}/files/", &args.hostname));
 
             let mut host_files: Vec<PathBuf> = vec![];
-
             if f.dir_exists(&host_files_base) {
-
-                let host_dirs = f.get_dirs_to_create(&host_files_base);
-                for dir in host_dirs {
-                    let base = dir.strip_prefix(&host_files_base).unwrap();
-                    let new_dir = target_dir.join(base);
-
-                    if !args.test {
-                        let result = f.create_dir_all(&new_dir);
-                        match result {
-                            Ok(_) => (),
-                            Err(msg) => {
-                                println!(":: Creating {:?} failed!\n{}", new_dir, msg);
-                                return false;
-                            }
-                        }
-                    }
+                if (!f.create_dirs(&host_files_base, &target_dir, args.test)) {
+                    return false;
                 }
-
-                // symlink the files
                 host_files = f.get_files_to_symlink(&host_files_base);
             }
 
-            let files = f.get_files_to_symlink(&global_files_base);
+            // tag specific config
+            let mut tag_files: Vec<(PathBuf, Vec<PathBuf>)> = vec![];
+            for tag in &args.tags {
+                let mut tag_files_base = package_base.clone();
+                tag_files_base.push(format!("tags/{}/files/", &tag));
+                
+                if f.dir_exists(&tag_files_base) {
+                    if (!f.create_dirs(&tag_files_base, &target_dir, args.test)) {
+                        return false;
+                    }
+                    let sym_files = f.get_files_to_symlink(&tag_files_base);
+                    tag_files.push((tag_files_base, sym_files));
+                }
+            }
 
             // map destinations to link targets
             // this method allows host-specfic files to take precedence
+            // over tag-specific files, which take preference over the others
+            // tags are evaluated in the order in which they are supplied
             let mut dests: HashMap<PathBuf, PathBuf> = HashMap::new();
             for file in host_files {
                 let dest = target_dir.join(
                     file.strip_prefix(&host_files_base).unwrap(),
                 );
                 dests.insert(dest, file.clone());
+            }
+
+            for (tag_base, files) in tag_files {
+                for file in files {
+                    let dest = target_dir.join(
+                        file.strip_prefix(&tag_base)
+                            .unwrap(),
+                    );
+                    if !dests.contains_key(&dest) {
+                        dests.insert(dest, file.clone());
+                    }
+                }
             }
 
             for file in files {
@@ -319,12 +316,15 @@ impl<'a> Runner<'a> {
             let mut post_up_hooks_dir = global_hooks_base.clone();
             post_up_hooks_dir.push("post-up");
             let mut host_post_up_hooks_dir = package_base.clone();
-            host_post_up_hooks_dir.push("hosts");
-            host_post_up_hooks_dir.push(&args.hostname);
-            host_post_up_hooks_dir.push("hooks");
-            host_post_up_hooks_dir.push("post-up");
+            host_post_up_hooks_dir.push(format!("hosts/{}/hooks/post-up/", &args.hostname));
+            let mut tag_post_up_hooks_dirs = Vec::new();
+            for tag in &args.tags {
+                let mut post_up_tag_dir = package_base.clone();
+                post_up_tag_dir.push(format!("tags/{}/hooks/post-up/", &tag));
+                tag_post_up_hooks_dirs.push(post_up_tag_dir);
+            }
 
-            let ok = hooks::run_hooks(&post_up_hooks_dir, &host_post_up_hooks_dir, args.test);
+            let ok = hooks::run_hooks(&post_up_hooks_dir, &host_post_up_hooks_dir, &tag_post_up_hooks_dirs, args.test);
             if !ok {
                 return false;
             }
@@ -379,60 +379,84 @@ impl<'a> Runner<'a> {
             let mut global_hooks_base = package_base.clone();
             global_hooks_base.push("hooks");
 
-
             // run the pre-down hooks
-
-            println!(":: Executing pre-down hooks.");
             let mut pre_down_hooks_dir = global_hooks_base.clone();
             pre_down_hooks_dir.push("pre-down");
             let mut host_pre_down_hooks_dir = package_base.clone();
             host_pre_down_hooks_dir.push(format!("hosts/{}/hooks/pre-down/", &args.hostname));
-            println!("{:?}", host_pre_down_hooks_dir);
+            let mut tag_pre_down_hooks_dirs = Vec::new();
+            for tag in &args.tags {
+                let mut pre_down_tag_dir = package_base.clone();
+                pre_down_tag_dir.push(format!("tags/{}/hooks/pre-down/", &tag));
+                tag_pre_down_hooks_dirs.push(pre_down_tag_dir);
+            }
 
-            let ok = hooks::run_hooks(&pre_down_hooks_dir, &host_pre_down_hooks_dir, args.test);
+            println!(":: Executing pre-down hooks.");
+            //println!("{:?}", host_pre_down_hooks_dir);
+            let ok = hooks::run_hooks(&pre_down_hooks_dir, &host_pre_down_hooks_dir, &tag_pre_down_hooks_dirs, args.test);
             if !ok {
                 return false;
             }
 
+            println!(":: Creating parent dirs where required.");
 
             let mut global_files_base = package_base.clone();
             global_files_base.push("files");
+
+            f.create_dirs(&global_files_base, &target_dir, args.test);
+            let files = f.get_files_to_symlink(&global_files_base);
 
             // host specific config
             let mut host_files_base = package_base.clone();
             host_files_base.push(format!("hosts/{}/files/", &args.hostname));
 
             let mut host_files: Vec<PathBuf> = vec![];
-
             if f.dir_exists(&host_files_base) {
-
-                let host_dirs = f.get_dirs_to_create(&host_files_base);
-                for dir in host_dirs {
-                    let base = dir.strip_prefix(&host_files_base).unwrap();
-                    let new_dir = target_dir.join(base);
-
-                    let result = f.create_dir_all(&new_dir);
-                    match result {
-                        Ok(_) => println!("created ok!"),
-                        Err(msg) => println!("fail: {}", msg),
-                    }
-
+                if (!f.create_dirs(&host_files_base, &target_dir, args.test)) {
+                    return false;
                 }
-
-                // symlink the files
                 host_files = f.get_files_to_symlink(&host_files_base);
             }
 
-            let files = f.get_files_to_symlink(&global_files_base);
+            // tag specific config
+            let mut tag_files: Vec<(PathBuf, Vec<PathBuf>)> = vec![];
+            for tag in &args.tags {
+                let mut tag_files_base = package_base.clone();
+                tag_files_base.push("tags");
+                tag_files_base.push(&tag);
+                tag_files_base.push("files");
+
+                if f.dir_exists(&tag_files_base) {
+                    if (!f.create_dirs(&tag_files_base, &target_dir, args.test)) {
+                        return false;
+                    }
+                    let sym_files = f.get_files_to_symlink(&tag_files_base);
+                    tag_files.push((tag_files_base, sym_files));
+                }
+            }
 
             // map destinations to link targets
             // this method allows host-specfic files to take precedence
+            // over tag-specific files, which take preference over the others
+            // tags are evaluated in the order in which they are supplied
             let mut dests: HashSet<PathBuf> = HashSet::new();
             for file in host_files {
                 let dest = target_dir.join(
                     file.strip_prefix(&host_files_base).unwrap(),
                 );
                 dests.insert(dest);
+            }
+
+            for (tag_base, files) in tag_files {
+                for file in files {
+                    let dest = target_dir.join(
+                        file.strip_prefix(&tag_base)
+                            .unwrap(),
+                    );
+                    if !dests.contains(&dest) {
+                        dests.insert(dest);
+                    }
+                }
             }
 
             for file in files {
@@ -498,17 +522,18 @@ impl<'a> Runner<'a> {
             let mut post_down_hooks_dir = global_hooks_base.clone();
             post_down_hooks_dir.push("post-down");
             let mut host_post_down_hooks_dir = package_base.clone();
-            host_post_down_hooks_dir.push("hosts");
-            host_post_down_hooks_dir.push(&args.hostname);
-            host_post_down_hooks_dir.push("hooks");
-            host_post_down_hooks_dir.push("post-down");
+            host_post_down_hooks_dir.push(format!("hosts/{}/hooks/post-down", &args.hostname));
+            let mut tag_post_down_hooks_dirs = Vec::new();
+            for tag in &args.tags {
+                let mut post_down_tag_dir = package_base.clone();
+                post_down_tag_dir.push(format!("tags/{}/hooks/post-down/", &tag));
+                tag_post_down_hooks_dirs.push(post_down_tag_dir);
+            }
 
-            let ok = hooks::run_hooks(&post_down_hooks_dir, &host_post_down_hooks_dir, args.test);
+            let ok = hooks::run_hooks(&post_down_hooks_dir, &host_post_down_hooks_dir, &tag_post_down_hooks_dirs, args.test);
             if !ok {
                 return false;
             }
-
-
         }
 
         return true;
