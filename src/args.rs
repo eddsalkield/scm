@@ -26,6 +26,7 @@ pub struct Args {
     pub force: bool,
     pub verbose: bool,
     pub packages: Vec<String>,
+    pub tags: Vec<String>,
     pub command: Command,
     pub add_args: Option<AddArgs>,
     pub no_confirm: bool,
@@ -133,6 +134,17 @@ pub fn get_args(matches: clap::ArgMatches) -> Result<Args, &'static str> {
             _ => vec![],
         },
 
+        tags: match matches.subcommand() {
+            ("install", Some(m)) |
+            ("uninstall", Some(m)) |
+            ("remove", Some(m)) => {
+                let mut vec = Vec::new();
+                vec.extend(matches.values_of("tag").unwrap_or_default().map(|x| x.to_owned()));
+                vec
+            }
+            _ => vec![],
+        },
+
         add_args: add_args,
     };
     Ok(args)
@@ -226,6 +238,22 @@ mod tests {
         let app_args = vec!["dotfiles-manager", "install", "vim", "zsh"];
         let args = args::get_args(app.get_matches_from(app_args)).unwrap();
         assert_eq!(args.packages, vec!["vim", "zsh"]);
+    }
+
+    #[test]
+    fn check_find_tag_name() {
+        let app = app::new();
+        let app_args = vec!["scm", "-T", "tag1", "install", "vim"];
+        let args = args::get_args(app.get_matches_from(app_args)).unwrap();
+        assert_eq!(args.tags, ["tag1"]);
+    }
+
+    #[test]
+    fn check_find_tag_names() {
+        let app = app::new();
+        let app_args = vec!["dotfiles-manager", "-T", "tag1", "-T", "tag2", "install", "vim"];
+        let args = args::get_args(app.get_matches_from(app_args)).unwrap();
+        assert_eq!(args.tags, ["tag1", "tag2"]);
     }
 
     #[test]

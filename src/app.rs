@@ -3,9 +3,9 @@ use clap::{App, Arg, SubCommand};
 
 pub fn new() -> App<'static, 'static> {
     App::new("dotfiles-manager")
-    .version("0.0.1")
-    .author("Samuel Walladge <samuel@swalladge.id.au>")
-    .about("Manages dotfiles")
+    .version("0.0.2")
+    .author("Edd Salkield <edd@salkield.uk>")
+    .about("A fast, stable, and portable configuration manager written in Rust")
     .arg(
         Arg::with_name("dir")
             .short("d")
@@ -22,7 +22,17 @@ pub fn new() -> App<'static, 'static> {
             .help("override computer's hostname to NAME")
             .takes_value(true),
     )
-    // TODO: config file options
+    .arg(
+        Arg::with_name("tag")
+            .short("T")
+            .long("tag")
+            .value_name("TAG")
+            .help("apply config files in TAG directory")
+            .takes_value(true)
+            .number_of_values(1)
+            .multiple(true),
+
+    )
     .arg(
         Arg::with_name("target")
             .short("t")
