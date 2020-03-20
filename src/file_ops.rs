@@ -48,7 +48,28 @@ impl FS {
                         }
                     }
                 }
-                _ => (),
+                _ => {
+                    // Test for broken symlinks
+                    match link.metadata() {
+                        Err(ref error) if error.kind() == io::ErrorKind::NotFound => {
+                            if (link.symlink_metadata().is_ok()) {
+                                println!(":: Removing existing broken symlink: {:?}", link);
+
+                                if !simulate {
+                                    let result = fs::remove_file(&link);
+                                    match result {
+                                        Err(msg) => {
+                                            println!(":: Failed to remove broken symlink: {}", msg);
+                                            return false;
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                },
             }
         } else {
             match fs::canonicalize(&link) {

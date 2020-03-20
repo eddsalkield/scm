@@ -18,3 +18,9 @@ dirs = "2.0.2"
 [badges]
 travis-ci = { repository = "swalladge/dotfiles-manager", branch = "master" }
 coveralls = { repository = "swalladge/dotfiles-manager", branch = "master" }
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+scm = { path = "/usr/bin/scm" }
